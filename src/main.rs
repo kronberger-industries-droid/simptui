@@ -1,12 +1,15 @@
+use core::*;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture, Event};
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
+use prettytable::{row, Table};
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Terminal;
+use simptui::{detect_file_type, parse_markdown};
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -59,12 +62,56 @@ impl App {
                 if let Some(entry) = self.files.iter().find(|file| file.file_name == input) {
                     match fs::read_to_string(&entry.full_path) {
                         Ok(content) => {
-                            self.file_content = Some(content);
-                            self.scroll_offset = 0; // Reset scroll position
-                            self.content_height = self
-                                .file_content
-                                .as_ref()
-                                .map_or(0, |content| content.lines().count() as u16);
+                            match detect_file_type(&entry.full_path) {
+                                "markdown" => {
+                                    let equations = parse_markdown(&content);
+                                    let mut table = Table::new();
+
+                                    table.add_row(row!["Active", "Name", "Equation"]);
+
+                                    for eq in &equations {
+                                        table.add_row(row![
+                                            if eq.active { "Yes" } else { "No" },
+                                            eq.name,
+                                            eq.body
+                                        ]);
+                                    }
+                                    self.file_content = Some(table.to_string());
+                                    self.scroll_offset = 0; // Reset scroll position
+                                    self.content_height = self
+                                        .file_content
+                                        .as_ref()
+                                        .map_or(0, |content| content.lines().count() as u16);
+                                }
+                                "csv" => {
+                                    match Table::from_csv_file(&entry.full_path) {
+                                        Ok(table) => {
+                                            self.file_content = Some(table.to_string());
+                                            self.scroll_offset = 0; // Reset scroll position
+                                            self.content_height =
+                                                self.file_content.as_ref().map_or(0, |content| {
+                                                    content.lines().count() as u16
+                                                });
+                                        }
+                                        Err(e) => {
+                                            self.file_content =
+                                                Some(format!("Error reading csv file: {} ", e))
+                                        }
+                                    }
+                                }
+                                "unknown" => {
+                                    self.file_content = Some(content);
+                                    self.scroll_offset = 0; // Reset scroll position
+                                    self.content_height = self
+                                        .file_content
+                                        .as_ref()
+                                        .map_or(0, |content| content.lines().count() as u16);
+                                }
+                                _ => {
+                                    self.file_content =
+                                        Some("Error detecting file type:".to_string())
+                                }
+                            }
                         }
                         Err(e) => self.file_content = Some(format!("Error reading file: {}", e)),
                     }

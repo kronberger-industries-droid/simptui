@@ -5,6 +5,9 @@ edition = "2021"
 
 [dependencies]
 crossterm = "0.28.1"
+indicatif = "0.17.11"
+prettytable = "0.10.0"
 ratatui = "0.29.0"
+regex = "1.11.1"
 tui-textarea = "0.7.0"
 walkdir = "2.5.0"
